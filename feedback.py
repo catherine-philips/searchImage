@@ -253,7 +253,6 @@ def display_results():
         st.write("No more results to display.")
  
 def app():
-
     # Initialize session state variables
     if "current_page" not in st.session_state:
         st.session_state.current_page = 0
@@ -263,6 +262,8 @@ def app():
         st.session_state.result_urls = []
     if "num_results" not in st.session_state:
         st.session_state.num_results = 6
+    if "feedback_submitted" not in st.session_state:
+        st.session_state.feedback_submitted = False  # Track if feedback has been submitted
     
     def save_feedback(feedback_data):
         df = pd.DataFrame([feedback_data])
@@ -294,6 +295,7 @@ def app():
             st.session_state.current_page = 0
             st.session_state.query_submitted = True
             st.session_state.result_urls = []  # Reset previous results
+            st.session_state.feedback_submitted = False  # Reset feedback submission status
 
             if user_query:
                 try:
@@ -314,8 +316,6 @@ def app():
                     if valid_json:
                         try:
                             parsed_query = json.loads(valid_json)
-                            #st.write("### Parsed Query:")
-                            #st.json(parsed_query)
                         except json.JSONDecodeError as e:
                             st.error(f"Error parsing JSON: {e}")
                     else:
@@ -348,22 +348,23 @@ def app():
 
                     if result_urls:
                         display_results()
+                        # Show the feedback buttons after results are displayed
+                        st.session_state["show_feedback_buttons"] = True
                     else:
                         st.write("No matching images found.")
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
 
-        # Thumbs Up/Down Feature - Only display after query is submitted
-        if st.session_state.query_submitted:
+        # Thumbs Up/Down Feature - Only display after query is submitted and feedback not submitted
+        if st.session_state.query_submitted and st.session_state.get("show_feedback_buttons", False) and not st.session_state.get(f"feedback_submitted_{user_query}", False):
             st.write("Did you find the results helpful?")
-            # Layout for thumbs-up and thumbs-down buttons next to the submit query button
+            
             col1, col2 = st.columns([1, 1])  # Adjust the width ratio to control spacing
 
             with col1:
                 if st.button("👍 Yes"):
                     try:
                         feedback_data = {
-                            "id": len(pd.read_excel("feedback.xlsx", engine='openpyxl')) + 1 if os.path.exists("feedback.xlsx") else 1,
                             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "query": user_query,
                             "thumbs_up_down": "thumbs_up",
@@ -371,7 +372,12 @@ def app():
                         }
                         save_feedback(feedback_data)
                         st.success("Thank you for your feedback!")
-                        st.session_state[f"feedback_{user_query}"] = True
+
+                        # Hide buttons after clicking
+                        st.session_state[f"feedback_submitted_{user_query}"] = True  
+                        st.session_state["show_feedback_buttons"] = False
+                        st.session_state.feedback_submitted = True  # Mark feedback as submitted
+                        st.rerun()  # 🔄 Force rerun to hide buttons
                     except Exception as e:
                         st.error(f"Error saving feedback: {e}")
 
@@ -379,24 +385,31 @@ def app():
                 if st.button("👎 No"):
                     st.session_state[f"show_feedback_box_{user_query}"] = True
 
-            # Show feedback box for thumbs-down feedback
-            if st.session_state.get(f"show_feedback_box_{user_query}", False):
-                feedback_text = st.text_area("Please provide feedback:")
-                if st.button("Submit Feedback"):
-                    try:
-                        feedback_data = {
-                            "id": len(pd.read_excel("feedback.xlsx", engine='openpyxl')) + 1 if os.path.exists("feedback.xlsx") else 1,
-                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "query": user_query,
-                            "thumbs_up_down": "thumbs_down",
-                            "feedback": feedback_text
-                        }
-                        save_feedback(feedback_data)
-                        st.success("Thank you for your feedback!")
-                        st.session_state[f"feedback_{user_query}"] = True
-                    except Exception as e:
-                        st.error(f"Error saving feedback: {e}")
+        # Show feedback box for thumbs-down feedback
+        if st.session_state.get(f"show_feedback_box_{user_query}", False):
+            feedback_text = st.text_area("Please provide feedback:")
+            if st.button("Submit Feedback"):
+                try:
+                    feedback_data = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "query": user_query,
+                        "thumbs_up_down": "thumbs_down",
+                        "feedback": feedback_text
+                    }
+                    save_feedback(feedback_data)
+                    st.success("Thank you for your feedback!")
 
+                    # Hide buttons and feedback box after clicking
+                    st.session_state[f"show_feedback_box_{user_query}"] = False  
+                    st.session_state[f"feedback_submitted_{user_query}"] = True  # Mark feedback as submitted
+                    st.session_state.feedback_submitted = True  # Mark feedback as submitted
+                    st.rerun()  # 🔄 Force rerun to hide feedback box
+                except Exception as e:
+                    st.error(f"Error saving feedback: {e}")
+
+        # Show a Thank You message after feedback is submitted
+        if st.session_state.feedback_submitted:
+            st.write("### Thank you for your feedback!")
 
 with tab2:
     # st.subheader("Apply Filters")

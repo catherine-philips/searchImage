@@ -1,1 +1,1 @@
-# searchImage
+# Image Search Application
